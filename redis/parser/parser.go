@@ -22,6 +22,7 @@ type Payload struct {
 // ParseStream reads data from io.Reader and send payloads through channel
 func ParseStream(reader io.Reader) <-chan *Payload {
 	ch := make(chan *Payload)
+	// 用一个协程不断的去解析数据，包装成Payload值返回给通道，只有出现IO错误时才会中断
 	go parse0(reader, ch)
 	return ch
 }
@@ -87,6 +88,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 	for {
 		// read line
 		var ioErr bool
+		// 一行一行的获取数据
 		msg, ioErr, err = readLine(bufReader, &state)
 		if err != nil {
 			ch <- &Payload{Err: err}
@@ -102,7 +104,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 		// parse line
 		if !state.readingMultiLine {
 			// receive new response
-			if msg[0] == '*' {
+			if msg[0] == '*' { // 如果是数组类型，则解析出数组的长度
 				// multi bulk protocol
 				err = parseMultiBulkHeader(msg, &state)
 				if err != nil {
@@ -119,7 +121,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					state = readState{} // reset state
 					continue
 				}
-			} else if msg[0] == '$' { // bulk protocol
+			} else if msg[0] == '$' { // bulk protocol 如果是字符串类型，则解析出字符串的长度
 				err = parseBulkHeader(msg, &state)
 				if err != nil {
 					ch <- &Payload{
@@ -136,7 +138,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					continue
 				}
 			} else {
-				// single line protocol
+				// single line protocol 简单字符串、错误、整数都是单行类型
 				result, err := parseSingleLineReply(msg)
 				ch <- &Payload{
 					Data: result,
@@ -161,6 +163,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 				if state.msgType == '*' {
 					result = protocol.MakeMultiBulkReply(state.args)
 				} else if state.msgType == '$' {
+					// 如果当前发送的数据是字符串类型，则只有一个参数
 					result = protocol.MakeBulkReply(state.args[0])
 				}
 				ch <- &Payload{
@@ -176,7 +179,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 func readLine(bufReader *bufio.Reader, state *readState) ([]byte, bool, error) {
 	var msg []byte
 	var err error
-	if state.bulkLen == 0 { // read normal line
+	if state.bulkLen == 0 { // read normal line 以\n为结尾读取一行数据，否则就按字节数读取数据
 		msg, err = bufReader.ReadBytes('\n')
 		if err != nil {
 			return nil, true, err
@@ -275,7 +278,7 @@ func parseSingleLineReply(msg []byte) (redis.Reply, error) {
 func readBody(msg []byte, state *readState) error {
 	line := msg[0 : len(msg)-2]
 	var err error
-	if len(line) > 0 && line[0] == '$' {
+	if len(line) > 0 && line[0] == '$' { // 说明现在读取的一行数据是数组类型
 		// bulk protocol
 		state.bulkLen, err = strconv.ParseInt(string(line[1:]), 10, 64)
 		if err != nil {
@@ -286,6 +289,7 @@ func readBody(msg []byte, state *readState) error {
 			state.bulkLen = 0
 		}
 	} else {
+		// 当解析到参数行数据时，将其添加到参数数组中
 		state.args = append(state.args, line)
 	}
 	return nil
