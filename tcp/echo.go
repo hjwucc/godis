@@ -18,6 +18,7 @@ import (
 
 // EchoHandler echos received line to client, using for test
 type EchoHandler struct {
+	// 都是并发安全的类型，因为一个连接一个协程，每个协程都会操作这两个属性
 	activeConn sync.Map
 	closing    atomic.Boolean
 }
@@ -35,6 +36,7 @@ type EchoClient struct {
 
 // Close close connection
 func (c *EchoClient) Close() error {
+	// 当客户端处理完连接的数据或是等待关闭超时，则再关闭连接
 	c.Waiting.WaitWithTimeout(10 * time.Second)
 	c.Conn.Close()
 	return nil
