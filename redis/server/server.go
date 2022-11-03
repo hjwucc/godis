@@ -60,9 +60,11 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 		return
 	}
 
+	// 将tcp连接包装为redis客户端
 	client := connection.NewConn(conn)
 	h.activeConn.Store(client, struct{}{})
 
+	// 获取连接数据
 	ch := parser.ParseStream(conn)
 	for payload := range ch {
 		if payload.Err != nil {
@@ -93,6 +95,7 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 			logger.Error("require multi bulk protocol")
 			continue
 		}
+		// 执行用户参数指令
 		result := h.db.Exec(client, r.Args)
 		if result != nil {
 			_ = client.Write(result.ToBytes())

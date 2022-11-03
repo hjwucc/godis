@@ -20,6 +20,7 @@ type Payload struct {
 }
 
 // ParseStream reads data from io.Reader and send payloads through channel
+// 每一个redis客户端都对应一个ParseStream用于获取客户端发的数据
 func ParseStream(reader io.Reader) <-chan *Payload {
 	ch := make(chan *Payload)
 	// 用一个协程不断的去解析数据，包装成Payload值返回给通道，只有出现IO错误时才会中断
@@ -163,7 +164,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 				if state.msgType == '*' {
 					result = protocol.MakeMultiBulkReply(state.args)
 				} else if state.msgType == '$' {
-					// 如果当前发送的数据是字符串类型，则只有一个参数
+					// 如果当前发送的数据是字符串类型，则只有一个数组参数
 					result = protocol.MakeBulkReply(state.args[0])
 				}
 				ch <- &Payload{
